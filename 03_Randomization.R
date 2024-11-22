@@ -2,14 +2,13 @@ library(tidyverse)
 library(here)
 library(lme4)
 library(car)
-library(parameters)
-library(modelbased)
+library(broom.mixed)
 
 par_remove <- str_c("participant_test_", c("04", "16", "26", "28", "39"))
 
-read_csv(here("Data", "comments.csv"), col_types = "tcdddcd_") -> d_comment
+read_csv(here("Data", "comments.csv"), col_types = "ddcd") -> d_comment
 
-read_csv(here("Data", "united2.csv"), col_types = "cccccdddddcdddldll") %>% 
+read_csv(here("Data", "gaze.csv"), col_types = "cccdddddlll") %>% 
   select(participant_name, image_name, frame_id, ends_with("timestamp"), gaze, FaceInView, FaceLooking, MM) %>% 
   filter(!participant_name %in% par_remove) %>% 
   mutate(across(where(is.logical), ~as.numeric(.))) -> d_gaze
@@ -21,11 +20,14 @@ d_gaze %>%
 # Randomization (requires long time)
 w_size_tmp <- 2.5
 
-df_effect_rnd <- tibble(Parameter = character(),
-                        Std_Coefficient = numeric(),
-                        CI = numeric(),
-                        CI_low = numeric(),
-                        CI_high = numeric())
+df_effect_rnd <- tibble(effect = character(),
+                        group = character(),
+                        term = character(),
+                        estimate = numeric(),
+                        std.error = numeric(),
+                        statistic = numeric(),
+                        p.value = numeric(),
+                        Repeat = numeric())
 
 set.seed(12345)
 for (j in 1:1000){
@@ -76,8 +78,7 @@ for (j in 1:1000){
               .groups = "drop") -> d_cooccurence_rnd 
   fit_rnd <- glmer(cbind(Cooccurrence_count, Comment_count - Cooccurrence_count) ~ category + (1 |participant_name),
                    data = d_cooccurence_rnd, family = "binomial")
-  standardize_parameters(fit_rnd) %>% 
-    as_tibble() %>% 
+  tidy(fit_rnd) %>% 
     mutate(Repeat = j) -> d_effect_rnd
   
   df_effect_rnd <- bind_rows(df_effect_rnd, d_effect_rnd)
@@ -95,29 +96,27 @@ here("Result", "wsize_2.5s.csv") %>%
             Prop_Cooccurrence = Cooccurrence_count / Comment_count,
             .groups = "drop") %>% 
   glmer(cbind(Cooccurrence_count, Comment_count - Cooccurrence_count) ~ category + (1 |participant_name),
-        data = ., family = "binomial") %>% 
-  standardize_parameters() %>% 
-  as_tibble() %>% 
-  filter(Parameter == "categorythe Others") %>% 
-  pull(Std_Coefficient) -> effect_obs
+        data = ., family = "binomial") %>%
+  tidy() %>% 
+  filter(term == "categorythe Others") %>% 
+  pull(estimate) -> effect_obs
 
-
-df_effect_rnd <- read_csv(here("Randomization", "df_effect_rnd_2.5s.csv"))
+df_effect_rnd <- read_csv(here("Randomization", "df_effect_rnd_2.5s.csv"), col_types = "cccdddd")
 
 df_effect_rnd %>% 
-  filter(Parameter == "categorythe Others") %>% 
+  filter(term == "categorythe Others") %>% 
   summarise(N = max(Repeat),
-            Mean = mean(Std_Coefficient),
-            Median = median(Std_Coefficient),
-            lwr = quantile(Std_Coefficient, probs = 0.025),
-            upr = quantile(Std_Coefficient, probs = 0.975)) %>% 
+            Mean = mean(estimate),
+            Median = median(estimate),
+            lwr = quantile(estimate, probs = 0.025),
+            upr = quantile(estimate, probs = 0.975)) %>% 
   mutate(effect_obs = effect_obs) -> df_rnd_sum
 
 df_rnd_sum 
 
 df_effect_rnd %>% 
-  filter(Parameter == "categorythe Others") %>% 
-  ggplot(aes(x = Std_Coefficient)) +
+  filter(term == "categorythe Others") %>% 
+  ggplot(aes(x = estimate)) +
   geom_histogram(binwidth = 0.02, fill = "white", color = "black") +
   geom_vline(xintercept = df_rnd_sum$lwr, lty = 2) +
   geom_vline(xintercept = df_rnd_sum$upr, lty = 2) +

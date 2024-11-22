@@ -3,14 +3,13 @@ library(lubridate)
 library(here)
 library(lme4)
 library(car)
-library(parameters)
-library(modelbased)
+library(broom.mixed)
 
 w_size <- c(2, 2.5, 3)
 
-read_csv(here("Data", "comments.csv"), col_types = "tcdddcd_") -> d_comment
+read_csv(here("Data", "comments.csv"), col_types = "ddcd") -> d_comment
 
-read_csv(here("Data", "united2.csv"), col_types = "cccccdddddcdddldll") %>% 
+read_csv(here("Data", "gaze.csv"), col_types = "cccdddddlll") %>% 
   select(participant_name, image_name, frame_id, ends_with("timestamp"), gaze, FaceInView, FaceLooking, MM) %>% 
   mutate(across(where(is.logical), ~as.numeric(.))) -> d_gaze
 
@@ -69,7 +68,7 @@ fit <- glmer(cbind(Cooccurrence_count, Comment_count - Cooccurrence_count) ~ cat
              data = df, family = "binomial")
 Anova(fit)
 summary(fit)
-model_parameters(fit, standardize = "refit")
+tidy(fit)
 
 df %>%
   mutate(y_pred = predict(fit, re.form = NA, type = "response"),
@@ -86,7 +85,7 @@ df %>%
         strip.text = element_text(size = 15, face = "bold"),
         legend.title = element_text(size = 15, face = "bold"),
         legend.text = element_text(size = 12))
-ggsave(here("Figure", "Figure2.jpg"), dpi = 300, width = 5, height = 4.5)
+ggsave(here("Figure", "Figure3.jpg"), dpi = 300, width = 5, height = 4.5)
 
 # check robustness of the result
 df_cooccurrence %>%
@@ -131,6 +130,5 @@ df_cooccurrence %>%
   ungroup() %>% 
   mutate(Effect = rep(c("category"), times = length(w_size)),
          significant = if_else(`Pr(>Chisq)` < 0.05, 1, 0)) %>% 
-  select(w_size_set, Effect, Chisq, Df, `Pr(>Chisq)`, significant) %>% 
-  kable()
+  select(w_size_set, Effect, Chisq, Df, `Pr(>Chisq)`, significant) 
 

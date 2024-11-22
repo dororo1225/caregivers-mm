@@ -6,13 +6,13 @@ library(modelbased)
 
 par_remove <- str_c("participant_test_", c("04", "16", "26", "28", "39"))
 
-read_csv(here("Data", "ParticipantInformation.csv"), col_types = "dcdcdccdddddddddddddd_") %>% 
+read_csv(here("Data", "ParticipantInformation.csv"), col_types = "ddccddd") %>% 
   filter(!participant_name %in% par_remove) %>% 
   mutate(Nonattuned_comment = mind_comment - app_comment,
          MM = app_comment / Total_comment * 100,
          PropNonattuned = Nonattuned_comment / Total_comment * 100) -> d_participant 
 
-read_csv(here("Data", "united2.csv"), col_types = "cccccdddddcdddldll") %>% 
+read_csv(here("Data", "gaze.csv"), col_types = "cccdddddlll") %>% 
   mutate(across(where(is.logical), ~as.numeric(.x))) %>%
   group_by(participant_name) %>%
   summarise(Total_image = n(),
